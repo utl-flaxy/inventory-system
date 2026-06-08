@@ -1,7 +1,9 @@
 package com.example.demo.controller;
 
-import com.example.demo.entity.Product;
+import com.example.demo.dto.ProductRequest;
+import com.example.demo.dto.ProductResponse;
 import com.example.demo.service.ProductService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,28 +16,33 @@ public class ProductController {
 
     private final ProductService productService;
 
-    // 一覧取得
     @GetMapping
-    public List<Product> getAll() {
+    public List<ProductResponse> getAll() {
         return productService.findAll();
     }
 
-    // 登録
+    @GetMapping("/{id}")
+    public ProductResponse getById(@PathVariable Long id) {
+        return productService.findById(id);
+    }
+
     @PostMapping
-    public Product create(@RequestBody Product product) {
-        return productService.save(product);
+    public ProductResponse create(
+            @Valid @RequestBody ProductRequest request) {
+
+        return productService.save(request);
     }
 
-    // 更新
     @PutMapping("/{id}")
-    public Product update(@PathVariable Long id, @RequestBody Product product) {
-        return productService.update(id, product);
+    public ProductResponse update(
+            @PathVariable Long id,
+            @Valid @RequestBody ProductRequest request) {
+
+        return productService.update(id, request);
     }
 
-    // 削除
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         productService.delete(id);
     }
-
 }
