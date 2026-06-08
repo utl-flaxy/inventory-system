@@ -30,8 +30,23 @@ Spring Bootを用いて開発した在庫管理・注文管理システムです
 | Database | H2 Database |
 | Build Tool | Maven |
 | Utility | Lombok |
-| API Test | Postman |
+| API Test | Apifox |
 | Version Control | Git / GitHub |
+
+---
+
+## 🏗 システム構成
+
+```mermaid
+flowchart TD
+
+    Client["Apifox"]
+    API["Spring Boot API"]
+    DB["H2 Database"]
+
+    Client --> API
+    API --> DB
+```
 
 ---
 
@@ -41,7 +56,8 @@ Spring Bootを用いて開発した在庫管理・注文管理システムです
 src/main/java/com/example/demo
 ├── controller
 │   ├── ProductController
-│   └── OrderController
+│   ├── OrderController
+│   └── OrderRequest
 │
 ├── service
 │   ├── ProductService
@@ -57,45 +73,42 @@ src/main/java/com/example/demo
 │   ├── Order
 │   └── OrderItem
 │
-└── exception
-    ├── OutOfStockException
-    └── GlobalExceptionHandler
+├── exception
+│   ├── OutOfStockException
+│   └── GlobalExceptionHandler
+│
+└── DemoApplication
 ```
 
 ---
 
 ## 🏗 ER図
 
-```text
-products
---------------------------------
-id (PK)
-name
-price
-stock
+```mermaid
+erDiagram
 
-        1
-        |
-        |
-        N
+    PRODUCTS {
+        BIGINT id PK
+        VARCHAR name
+        INTEGER price
+        INTEGER stock
+    }
 
-order_items
---------------------------------
-id (PK)
-order_id (FK)
-product_id (FK)
-quantity
-price
+    ORDERS {
+        BIGINT id PK
+        INTEGER total_price
+    }
 
-        N
-        |
-        |
-        1
+    ORDER_ITEMS {
+        BIGINT id PK
+        BIGINT order_id FK
+        BIGINT product_id FK
+        INTEGER quantity
+        INTEGER price
+    }
 
-orders
---------------------------------
-id (PK)
-total_price
+    ORDERS ||--o{ ORDER_ITEMS : contains
+    PRODUCTS ||--o{ ORDER_ITEMS : ordered
 ```
 
 ---
@@ -108,7 +121,7 @@ total_price
 |----------|----------|
 | id | 商品ID |
 | name | 商品名 |
-| price | 価格 |
+| price | 商品価格 |
 | stock | 在庫数 |
 
 ---
@@ -140,43 +153,59 @@ total_price
 
 ## 💡 設計意図
 
-### Order と OrderItem を分離
+### Order と OrderItem を分離した理由
 
-1つの注文で複数商品を購入できるようにするため、1対多の関係で設計しています。
-
-### 注文時価格を保存
-
-商品価格が変更されても過去の注文履歴が変わらないように、注文時点の価格を保持しています。
-
-### totalPriceを保持
-
-毎回集計を行わず、注文作成時に保存することでパフォーマンスを向上させています。
+1つの注文で複数の商品を購入できるようにするため、1対多の関係で設計しています。
 
 ---
 
-## 🔄 注文処理フロー
+### 注文時価格を保持する理由
 
-注文作成時には以下の処理を実行します。
+商品価格は変更される可能性があります。
 
-1. 商品取得
-2. 在庫確認
-3. 在庫減算
-4. 注文作成
-5. 注文明細作成
-6. 注文完了
+注文時点の価格を保持することで、後から価格変更があった場合でも過去の注文履歴の整合性を維持できます。
 
-```text
-POST /orders
-      ↓
-在庫確認
-      ↓
-在庫減算
-      ↓
-Order保存
-      ↓
-OrderItem保存
-      ↓
-レスポンス返却
+---
+
+### totalPriceを保持する理由
+
+注文一覧取得時に毎回集計処理を行わないよう、注文作成時に計算して保存しています。
+
+パフォーマンス向上を意識した設計です。
+
+---
+
+## 🔄 注文処理シーケンス
+
+```mermaid
+sequenceDiagram
+
+    participant Client
+    participant OrderController
+    participant OrderService
+    participant ProductRepository
+    participant OrderRepository
+    participant OrderItemRepository
+
+    Client->>OrderController: POST /orders
+
+    OrderController->>OrderService: createOrder()
+
+    OrderService->>ProductRepository: 商品取得
+    ProductRepository-->>OrderService: Product
+
+    OrderService->>OrderService: 在庫確認
+
+    OrderService->>ProductRepository: 在庫更新
+
+    OrderService->>OrderRepository: Order保存
+    OrderRepository-->>OrderService: Order
+
+    OrderService->>OrderItemRepository: OrderItem保存
+
+    OrderService-->>OrderController: Order
+
+    OrderController-->>Client: Response
 ```
 
 ---
@@ -196,7 +225,7 @@ public Order createOrder(OrderRequest request)
 
 ## ⚠️ 例外ハンドリング
 
-`@RestControllerAdvice` により例外を一元管理しています。
+`@RestControllerAdvice` を利用して例外を一元管理しています。
 
 ### 在庫不足
 
@@ -206,6 +235,8 @@ public Order createOrder(OrderRequest request)
   "message": "在庫が不足しています"
 }
 ```
+
+---
 
 ### 商品未存在
 
@@ -241,7 +272,7 @@ public Order createOrder(OrderRequest request)
 
 ---
 
-## リクエスト例
+## 📥 リクエスト例
 
 ### 商品登録
 
@@ -266,7 +297,22 @@ public Order createOrder(OrderRequest request)
 
 ---
 
-## レスポンス例
+## 📤 レスポンス例
+
+### 商品取得
+
+```json
+{
+  "id": 1,
+  "name": "りんご",
+  "price": 300,
+  "stock": 8
+}
+```
+
+---
+
+### 注文作成
 
 ```json
 {
@@ -279,15 +325,55 @@ public Order createOrder(OrderRequest request)
 
 ## 🧪 動作確認
 
-### H2 Console
+### 商品登録
 
+```http
+POST /products
 ```
+
+---
+
+### 商品一覧取得
+
+```http
+GET /products
+```
+
+---
+
+### 商品単体取得
+
+```http
+GET /products/1
+```
+
+---
+
+### 注文作成
+
+```http
+POST /orders
+```
+
+---
+
+### 注文一覧取得
+
+```http
+GET /orders
+```
+
+---
+
+## 🖥 H2 Console
+
+```text
 http://localhost:8080/h2-console
 ```
 
 設定
 
-```
+```text
 JDBC URL:
 jdbc:h2:file:./data/testdb
 
@@ -295,7 +381,7 @@ User:
 sa
 
 Password:
-(空)
+（空）
 ```
 
 ---
@@ -306,6 +392,12 @@ Password:
 
 ```bash
 git clone <repository-url>
+```
+
+### プロジェクト移動
+
+```bash
+cd demo
 ```
 
 ### 起動
@@ -319,21 +411,28 @@ git clone <repository-url>
 ## 📚 学んだこと
 
 - REST API設計
-- Spring BootによるWeb開発
-- JPAによるデータ永続化
+- Spring Bootによるバックエンド開発
+- Spring Data JPAによるDB操作
 - トランザクション管理
 - 例外ハンドリング
-- 正規化を意識したDB設計
-- リレーション設計
+- テーブル正規化
+- エンティティリレーション設計
 
 ---
 
-## 🔮 今後の改善
+## 🔮 今後の改善予定
 
 - DTO導入
 - JUnitテスト追加
 - Docker対応
-- AWSデプロイ
-- JWT認証実装
 - MySQL対応
-- Reactフロントエンド作成
+- AWSデプロイ（EC2）
+- Terraform導入
+- JWT認証機能追加
+- Reactフロントエンド実装
+
+---
+
+## 👤 作者
+
+Portfolio Project by Iwamoto
