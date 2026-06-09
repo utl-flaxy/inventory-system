@@ -29,43 +29,75 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
-        // Authorizationヘッダ取得
-        String authHeader = request.getHeader("Authorization");
+        System.out.println("PATH = " + request.getServletPath());
 
-        // Bearerトークンでなければスルー
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // auth系はJWTチェックしない
+        if (request.getServletPath().startsWith("/auth")) {
+
+            System.out.println("SKIP AUTH");
+
             filterChain.doFilter(request, response);
             return;
         }
 
-        // JWT取り出し
-        String token = authHeader.substring(7);
+        // Authorizationヘッダ取得
+        String authHeader = request.getHeader("Authorization");
 
-        // username取得
-        String username = jwtUtil.extractUsername(token);
+        // Bearerトークンが無ければ次へ
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
 
-        // 未認証なら認証情報をセット
-        if (username != null
-                && SecurityContextHolder.getContext().getAuthentication() == null) {
+            System.out.println("NO TOKEN");
 
-            UserDetails userDetails =
-                    userDetailsService.loadUserByUsername(username);
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            if (jwtUtil.isTokenValid(token)) {
+        try {
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities());
+            System.out.println("JWT FILTER START");
 
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request));
+            // Bearer を除去
+            String token = authHeader.substring(7);
 
-                SecurityContextHolder.getContext()
-                        .setAuthentication(authentication);
+            // username取得
+            String username = jwtUtil.extractUsername(token);
+
+            System.out.println("USERNAME = " + username);
+
+            // 未認証なら認証情報セット
+            if (username != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                System.out.println("LOAD USER");
+
+                UserDetails userDetails =
+                        userDetailsService.loadUserByUsername(username);
+
+                if (jwtUtil.isTokenValid(token)) {
+
+                    System.out.println("TOKEN VALID");
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities());
+
+                    authentication.setDetails(
+                            new WebAuthenticationDetailsSource()
+                                    .buildDetails(request));
+
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(authentication);
+
+                    System.out.println("AUTH SUCCESS");
+                }
             }
+
+        } catch (Exception e) {
+
+            System.out.println("JWT ERROR");
+            e.printStackTrace();
         }
 
         filterChain.doFilter(request, response);
