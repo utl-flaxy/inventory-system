@@ -1,0 +1,14 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Variables
+terraform.tfvars
+
+# SSH Keys
+*.pem
+*.key
+id_ed25519*
+terraform_ed25519*
